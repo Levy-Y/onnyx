@@ -14,15 +14,19 @@ pub fn read_script_file(path: &str) -> String {
 
 pub fn parse_script(script_content: &String) -> Result<Vec<Actions>, ExecutorError> {
     if script_content.len() == 0 {
-        return Err(ExecutorError::TaskFailed(String::from("Cannot parse an empty file.")))
+        return Err(ExecutorError::TaskFailed(String::from(
+            "Cannot parse an empty file.",
+        )));
     }
 
-    let mut actions: Vec<Actions> = vec!();
+    let mut actions: Vec<Actions> = vec![];
 
     for line in script_content.lines() {
         let action = Actions::from_line(line);
         if action.is_err() {
-            return Err(ExecutorError::TaskFailed("Error while parsing script.".to_string()))
+            return Err(ExecutorError::TaskFailed(
+                "Error while parsing script.".to_string(),
+            ));
         }
 
         actions.push(action.unwrap());
@@ -41,7 +45,7 @@ pub fn execute_actions(actions: Vec<Actions>) {
                 for key in keys {
                     println!("Pressing key: {}", key);
                 }
-            },
+            }
             _ => {}
         }
     }

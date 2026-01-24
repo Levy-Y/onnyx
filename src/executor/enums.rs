@@ -1,15 +1,17 @@
-use std::fmt::{Debug, Display, Formatter};
+use crate::executor::enums::Keys::{
+    ALT, CAPS, CTRL, DEL, END, ENTER, ESC, GUI, HOME, PGDN, PGUP, PRTSCR, SHIFT, TAB,
+};
 use crate::executor::errors::executor_errors::ParseError;
-use std::str::FromStr;
-use crate::executor::Actions::{COMMENT, KEY, WAIT, WRITE};
-use crate::executor::enums::Keys::{ALT, CAPS, CTRL, DEL, END, ENTER, ESC, GUI, HOME, PGDN, PGUP, PRTSCR, SHIFT, TAB};
 use crate::executor::errors::executor_errors::ParseError::{ActionParseError, KeyParseError};
+use crate::executor::Actions::{COMMENT, KEY, WAIT, WRITE};
+use std::fmt::{Debug, Display, Formatter};
+use std::str::FromStr;
 
 pub enum Actions {
     WRITE(String),
     WAIT(u16),
     KEY(Vec<Keys>),
-    COMMENT
+    COMMENT,
 }
 
 #[derive(Debug)]
@@ -39,7 +41,7 @@ impl Actions {
             "WRITE" => {
                 let trimmed = &arg.trim();
                 if trimmed.starts_with('"') && trimmed.ends_with('"') {
-                    let unquoted = &trimmed[1..trimmed.len() -1 ];
+                    let unquoted = &trimmed[1..trimmed.len() - 1];
                     Ok(WRITE(String::from(unquoted)))
                 } else {
                     Ok(WRITE(String::from(arg)))
@@ -47,26 +49,30 @@ impl Actions {
             }
             "WAIT" => Ok(WAIT(arg.parse::<u16>().unwrap_or(0))),
             "KEY" => {
-                let mut keys: Vec<Keys> = vec!();
+                let mut keys: Vec<Keys> = vec![];
                 if !arg.contains('+') {
                     let key = Keys::from_str(arg);
                     if key.is_err() {
-                        return Err(KeyParseError("Cannot parse action argument, exiting...".to_string()))
+                        return Err(KeyParseError(
+                            "Cannot parse action argument, exiting...".to_string(),
+                        ));
                     }
                     keys.push(key?);
-                    return Ok(KEY(keys))
+                    return Ok(KEY(keys));
                 }
 
                 let split_arg: Vec<&str> = arg.split('+').collect();
                 for key in split_arg {
                     let key = Keys::from_str(key);
                     if key.is_err() {
-                        return Err(KeyParseError("Cannot parse action argument, exiting...".to_string()))
+                        return Err(KeyParseError(
+                            "Cannot parse action argument, exiting...".to_string(),
+                        ));
                     }
                     keys.push(key?);
                 }
                 Ok(KEY(keys))
-            },
+            }
             "//" => Ok(COMMENT),
             _ => Err(ActionParseError(String::from(command))),
         }
@@ -79,7 +85,7 @@ impl Display for Keys {
     }
 }
 
-impl FromStr for Keys{
+impl FromStr for Keys {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -98,7 +104,7 @@ impl FromStr for Keys{
             "PGUP" => Ok(PGUP),
             "PGDN" => Ok(PGDN),
             "ENTER" => Ok(ENTER),
-            _ => Err(KeyParseError(s.to_string()))
+            _ => Err(KeyParseError(s.to_string())),
         }
     }
 }
