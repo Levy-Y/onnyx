@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "author": "Anonymous maker",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-s3-devkitc-1", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-ili9341", "id": "lcd1", "top": -152.8, "left": -221.1, "attrs": {} }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "esp:3V3", "lcd1:VCC", "red", [ "v0" ] ],
+    [ "esp:GND", "lcd1:GND", "black", [ "v0" ] ],
+    [ "esp:10", "lcd1:CS", "orange", [ "v0" ] ],
+    [ "esp:9", "lcd1:RESET", "yellow", [ "v0" ] ],
+    [ "esp:11", "lcd1:D/C", "green", [ "v0" ] ],
+    [ "esp:13", "lcd1:SDI", "blue", [ "v0" ] ],
+    [ "esp:12", "lcd1:SCK", "purple", [ "v0" ] ],
+    [ "esp:3V3", "lcd1:LED", "red", [ "v0" ] ],
+    [ "esp:14", "lcd1:SDO", "grey", [ "v0" ] ]
+  ],
+  "dependencies": {}
+}
