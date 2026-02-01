@@ -73,12 +73,18 @@ pub fn get_ap_info<'a>(modem: &mut BlockingWifi<EspWifi>) -> anyhow::Result<Wifi
     let ssid = ap_config.ssid.to_string();
     let password = ap_config.password.to_string();
     let ip = modem.wifi().ap_netif().get_ip_info()?.ip.to_string();
-    let mac = wifi.ap_netif().get_mac()?
+    let mac = wifi
+        .ap_netif()
+        .get_mac()?
         .iter()
         .map(|b| format!("{:02X}", b))
         .collect::<Vec<String>>()
         .join(":");
 
-    Ok(WifiInformation { ssid, password, ip, mac })
-
+    Ok(WifiInformation {
+        ssid,
+        password,
+        ip,
+        mac,
+    })
 }

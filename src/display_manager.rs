@@ -1,21 +1,19 @@
+use crate::wifi_manager::PasswordString;
 use anyhow::anyhow;
 use embedded_graphics::mono_font::ascii::*;
-use embedded_graphics::pixelcolor::{Rgb565,};
+use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::Size;
 use esp_idf_hal::delay::Ets;
-use esp_idf_hal::gpio::{
-    Gpio0, Gpio1, Gpio2, Gpio3, Gpio4, Gpio5, Output, PinDriver,
-};
+use esp_idf_hal::gpio::{Gpio0, Gpio1, Gpio2, Gpio3, Gpio4, Gpio5, Output, PinDriver};
 use esp_idf_hal::peripheral::Peripheral;
 use esp_idf_hal::spi;
 use esp_idf_hal::spi::{SpiDeviceDriver, SpiDriver, SPI2};
 use esp_idf_hal::units::Hertz;
 use kolibri_embedded_gui::label::Label;
 use kolibri_embedded_gui::spacer::Spacer;
-use kolibri_embedded_gui::style::{medsize_crt_rgb565_style};
+use kolibri_embedded_gui::style::medsize_crt_rgb565_style;
 use kolibri_embedded_gui::ui::Ui;
 use st7735_lcd::{Orientation, ST7735};
-use crate::wifi_manager::PasswordString;
 
 pub enum DeviceState {
     Idle(String, PasswordString, String),
@@ -85,13 +83,17 @@ pub fn set_state<'a, 'b>(
 where
     'a: 'b,
 {
-    ui.clear_background().map_err(|_| anyhow!("Error occurred while clearing screen"))?;
+    ui.clear_background()
+        .map_err(|_| anyhow!("Error occurred while clearing screen"))?;
 
     match state {
         DeviceState::Idle(ssid, password, ip) => {
             ui.add(Label::new("READY").with_font(FONT_7X14_BOLD));
             ui.add(Label::new(format!("SSID: {}", ssid).as_str()).with_font(FONT_6X10));
-            ui.add(Label::new(format!("PASSWORD: {}", password.as_str()).as_str()).with_font(FONT_6X10));
+            ui.add(
+                Label::new(format!("PASSWORD: {}", password.as_str()).as_str())
+                    .with_font(FONT_6X10),
+            );
             ui.add(Label::new(format!("IP: {}", ip).as_str()).with_font(FONT_6X10));
         }
         DeviceState::Fatal(_) => {

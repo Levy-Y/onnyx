@@ -3,8 +3,8 @@ use esp_idf_svc::http::server::{Configuration, EspHttpConnection, EspHttpServer,
 use esp_idf_svc::http::{Headers, Method};
 use esp_idf_svc::io::Read;
 use log::info;
-use serde_json::json;
 use serde::Deserialize;
+use serde_json::json;
 
 const INDEX_HTML: &str = include_str!("static/index.html");
 const MAX_LEN: usize = 128;
@@ -15,7 +15,7 @@ pub struct ExecutionRequest {
 }
 
 pub struct WebActor<'a> {
-    server: EspHttpServer<'a>
+    server: EspHttpServer<'a>,
 }
 
 impl WebActor<'static> {
@@ -27,9 +27,7 @@ impl WebActor<'static> {
         let mut server = EspHttpServer::new(&config)?;
 
         server.fn_handler("/", Method::Get, |req| -> anyhow::Result<()> {
-           req
-               .into_ok_response()?
-               .write_all(&INDEX_HTML.as_bytes())?;
+            req.into_ok_response()?.write_all(&INDEX_HTML.as_bytes())?;
             Ok(())
         })?;
 
@@ -43,7 +41,8 @@ impl WebActor<'static> {
         })?;
 
         server.fn_handler("/scripts", Method::Post, |mut req| -> anyhow::Result<()> {
-            let len = req.header("Content-Length")
+            let len = req
+                .header("Content-Length")
                 .and_then(|v| v.parse::<usize>().ok())
                 .unwrap_or(0);
 
