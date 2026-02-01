@@ -1,32 +1,28 @@
-use embedded_graphics::draw_target::DrawTarget;
-use embedded_graphics::geometry::{Dimensions, Point};
-use embedded_graphics::mono_font::ascii::FONT_6X10;
-use embedded_graphics::mono_font::{ascii, MonoTextStyle};
-use embedded_graphics::pixelcolor::{Rgb565, RgbColor};
-use embedded_graphics::text::Text;
-use embedded_graphics::Drawable;
-use esp_idf_hal::delay::{Ets, FreeRtos};
+use anyhow::anyhow;
+use embedded_graphics::mono_font::ascii::*;
+use embedded_graphics::pixelcolor::{Rgb565,};
+use embedded_graphics::prelude::Size;
+use esp_idf_hal::delay::Ets;
 use esp_idf_hal::gpio::{
-    Gpio0, Gpio1, Gpio2, Gpio3, Gpio39, Gpio4, Gpio5, Output, OutputPin, PinDriver,
+    Gpio0, Gpio1, Gpio2, Gpio3, Gpio4, Gpio5, Output, PinDriver,
 };
 use esp_idf_hal::peripheral::Peripheral;
-use esp_idf_hal::prelude::Peripherals;
 use esp_idf_hal::spi;
-use esp_idf_hal::spi::{SpiBusDriver, SpiDeviceDriver, SpiDriver, SPI2};
+use esp_idf_hal::spi::{SpiDeviceDriver, SpiDriver, SPI2};
 use esp_idf_hal::units::Hertz;
 use kolibri_embedded_gui::label::Label;
-use kolibri_embedded_gui::style::medsize_rgb565_style;
+use kolibri_embedded_gui::spacer::Spacer;
+use kolibri_embedded_gui::style::{medsize_crt_rgb565_style};
 use kolibri_embedded_gui::ui::Ui;
 use st7735_lcd::{Orientation, ST7735};
-use std::fmt::Display;
-use log::{info, warn};
+use crate::wifi_manager::PasswordString;
 
-pub enum DeviceState<'a> {
-    Idle(String, String, String),
-    Running(&'a str),
+pub enum DeviceState {
+    Idle(String, PasswordString, String),
+    Running(String),
     Finished,
+    Fatal(String),
 }
-
 pub type DisplayType<'a> = ST7735<
     SpiDeviceDriver<'a, SpiDriver<'a>>,
     PinDriver<'a, Gpio2, Output>,
@@ -77,7 +73,7 @@ pub fn init_ui<'a, 'b>(
 where
     'a: 'b,
 {
-    let mut ui = Ui::new_fullscreen(display, medsize_rgb565_style());
+    let mut ui = Ui::new_fullscreen(display, medsize_crt_rgb565_style());
     ui.clear_background().unwrap();
     Ok(ui)
 }
@@ -89,13 +85,21 @@ pub fn set_state<'a, 'b>(
 where
     'a: 'b,
 {
+    ui.clear_background().map_err(|_| anyhow!("Error occurred while clearing screen"))?;
+
     match state {
         DeviceState::Idle(ssid, password, ip) => {
-            ui.add(Label::new("READY").with_font(ascii::FONT_7X14_BOLD));
+            ui.add(Label::new("READY").with_font(FONT_7X14_BOLD));
             ui.add(Label::new(format!("SSID: {}", ssid).as_str()).with_font(FONT_6X10));
-            ui.add(Label::new(format!("PASSWORD: {}", password).as_str()).with_font(FONT_6X10));
+            ui.add(Label::new(format!("PASSWORD: {}", password.as_str()).as_str()).with_font(FONT_6X10));
             ui.add(Label::new(format!("IP: {}", ip).as_str()).with_font(FONT_6X10));
         }
+        DeviceState::Fatal(_) => {
+            ui.add(Spacer::new(Size::new(160, 26)));
+            ui.add(Label::new("Fatal error happened").with_font(FONT_7X14_BOLD));
+            ui.add(Label::new("Manual reset required!").with_font(FONT_7X14_BOLD));
+        }
+
         // DeviceState::Running(payload) => {
         //     // Draw generic "Hacking" visual
         //     Text::new("EXECUTING:", Point::zero(), style)
