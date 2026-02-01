@@ -41,6 +41,8 @@ smart-leds = "0.4"
 usb-device = "0.3.2"
 #usbd-hid = "0.9.0"
 st7735-lcd = "0.10.0"
+serde_json = "1.0.149"
+serde = { version = "1.0.227", features = ["derive"] }
 
 [build-dependencies]
 embuild = "0.33"
