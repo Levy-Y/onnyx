@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use esp_idf_hal::modem::Modem;
 use esp_idf_hal::peripheral::Peripheral;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
@@ -5,6 +6,22 @@ use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::wifi::{
     AccessPointConfiguration, AuthMethod, BlockingWifi, Configuration, EspWifi,
 };
+
+pub struct PasswordString(String);
+
+impl PasswordString {
+    pub fn new(s: String) -> anyhow::Result<Self> {
+        if (s.len() < 8) {
+            Err(anyhow!("Password '{}' is shorter than 8 characters", s))
+        } else {
+            Ok(PasswordString(s))
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
 pub struct WifiInformation {
     pub(crate) ssid: String,
