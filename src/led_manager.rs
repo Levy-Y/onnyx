@@ -1,7 +1,7 @@
 use apa102_spi::{Apa102Writer, PixelOrder, SmartLedsWrite, RGB8};
 use esp_idf_hal::gpio::{Gpio39, Gpio40};
 use esp_idf_hal::peripheral::Peripheral;
-use esp_idf_hal::prelude::{Hertz, Peripherals};
+use esp_idf_hal::prelude::{Hertz};
 use esp_idf_hal::spi::config::DriverConfig;
 use esp_idf_hal::spi::{config, SpiBusDriver, SpiDriver, SpiError, SPI2};
 

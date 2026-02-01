@@ -6,11 +6,11 @@ mod errors {
 
 pub use crate::executor::errors::executor_errors::ExecutorError;
 pub use enums::Actions;
-use std::fs;
+// use std::fs;
 
-pub fn read_script_file(path: &str) -> String {
-    fs::read_to_string(path).unwrap()
-}
+// pub fn read_script_file(path: &str) -> String {
+//     fs::read_to_string(path).unwrap()
+// }
 
 pub fn parse_script(script_content: &String) -> Result<Vec<Actions>, ExecutorError> {
     if script_content.len() == 0 {
