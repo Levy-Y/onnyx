@@ -30,13 +30,15 @@ experimental = ["esp-idf-svc/experimental"]
 [dependencies]
 log = "0.4"
 esp-idf-svc = "0.51"
-esp-idf-hal = "0.45"
-esp-idf-sys = "0.36.1"
+esp-idf-hal = { version = "0.45" }
+esp-idf-sys = { version = "0.36.1", features = ["binstart"] }
+
 embedded-graphics = "0.8.1"
 kolibri-embedded-gui = "0.1.0"
 anyhow = "1.0.100"
 apa102-spi = "0.5"
 smart-leds = "0.4"
+st7735-lcd = "0.10.0"
 
 [build-dependencies]
 embuild = "0.33"
