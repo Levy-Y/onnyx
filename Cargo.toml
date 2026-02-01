@@ -38,6 +38,8 @@ kolibri-embedded-gui = "0.1.0"
 anyhow = "1.0.100"
 apa102-spi = "0.5"
 smart-leds = "0.4"
+usb-device = "0.3.2"
+#usbd-hid = "0.9.0"
 st7735-lcd = "0.10.0"
 
 [build-dependencies]
