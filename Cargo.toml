@@ -29,8 +29,8 @@ experimental = ["esp-idf-svc/experimental"]
 
 [dependencies]
 log = "0.4"
-esp-idf-svc = "0.51"
-esp-idf-hal = { version = "0.45" }
+esp-idf-svc = { version = "0.51", features = ["experimental"] }
+esp-idf-hal = { version = "0.45", features = ["experimental"] }
 esp-idf-sys = { version = "0.36.1", features = ["binstart"] }
 
 embedded-graphics = "0.8.1"
