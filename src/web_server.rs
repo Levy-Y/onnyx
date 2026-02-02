@@ -1,3 +1,4 @@
+use std::sync::mpsc::{Receiver, Sender};
 use esp_idf_hal::io::Write;
 use esp_idf_svc::http::server::{Configuration, EspHttpConnection, EspHttpServer, Request};
 use esp_idf_svc::http::{Headers, Method};
@@ -5,6 +6,7 @@ use esp_idf_svc::io::Read;
 use log::info;
 use serde::Deserialize;
 use serde_json::json;
+use crate::storage_manager::File;
 
 const INDEX_HTML: &str = include_str!("static/index.html");
 const MAX_LEN: usize = 128;
@@ -19,7 +21,11 @@ pub struct WebActor<'a> {
 }
 
 impl WebActor<'static> {
-    pub fn start(port: u16) -> anyhow::Result<Self> {
+    pub fn start(port: u16, tx: Sender<String>, rx: Receiver<Vec<File>>) -> anyhow::Result<Self> {
+        let mut scripts: Vec<File> = vec![];
+
+        scripts.append(&mut rx.try_recv().unwrap_or(vec![]));
+
         let config = Configuration {
             http_port: port.into(),
             ..Default::default()
@@ -40,7 +46,7 @@ impl WebActor<'static> {
             Ok(())
         })?;
 
-        server.fn_handler("/scripts", Method::Post, |mut req| -> anyhow::Result<()> {
+        server.fn_handler("/scripts", Method::Post, move |mut req| -> anyhow::Result<()> {
             let len = req
                 .header("Content-Length")
                 .and_then(|v| v.parse::<usize>().ok())
@@ -57,6 +63,8 @@ impl WebActor<'static> {
 
             let execution_request = serde_json::from_slice::<ExecutionRequest>(&buf)?;
             info!("{}", execution_request.name);
+
+            tx.send(execution_request.name)?;
 
             req.into_status_response(204)?;
             Ok(())
