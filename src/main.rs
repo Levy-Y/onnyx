@@ -1,9 +1,15 @@
+#![feature(mpmc_channel)]
+
 mod display_manager;
 mod executor;
 mod led_manager;
 mod storage_manager;
 mod web_server;
 mod wifi_manager;
+
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 use crate::display_manager::{init_display, init_ui, set_state};
 use crate::web_server::WebActor;
@@ -12,6 +18,8 @@ use display_manager::DeviceState;
 use esp_idf_hal::{delay::FreeRtos, prelude::Peripherals};
 use esp_idf_svc::{log::EspLogger, sys::link_patches};
 use log::info;
+use crate::executor::ExecutorActor;
+use crate::storage_manager::File;
 
 fn main() -> anyhow::Result<()> {
     link_patches();
@@ -44,8 +52,27 @@ fn main() -> anyhow::Result<()> {
         ),
     )?;
 
-    let _ = WebActor::start(80)?;
+    let (web_executor_tx, web_executor_rx) = mpsc::channel::<String>();
+    let (storage_web_tx, storage_web_rx) = mpsc::channel::<Vec<File>>();
 
+    let tx_clone1 = web_executor_tx.clone();
+
+    storage_web_tx.send(vec![])?;
+
+    thread::spawn(move || {
+        ExecutorActor::start(web_executor_rx)
+    });
+
+    thread::Builder::new()
+        .stack_size(8192)
+        .name("web_actor".into())
+        .spawn(move || {
+            let _web_actor = WebActor::start(80, tx_clone1, storage_web_rx).unwrap();
+
+            loop {
+                thread::sleep(Duration::from_millis(1000));
+            }
+        })?;
     loop {
         FreeRtos::delay_ms(1000);
     }
