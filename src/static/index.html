@@ -237,7 +237,7 @@
 </style>
 <script>
   function fetch_scripts() {
-    return fetch("http://192.168.71.1:80/scripts", {
+    return fetch("/scripts", {
       method: "GET",
     }).then(res => res.json())
       .then(data => {
@@ -253,7 +253,7 @@
   }
 
   function execute_script(script_name) {
-    fetch("http://192.168.71.1:80/scripts", {
+    fetch("/scripts", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -303,7 +303,7 @@
       item.innerHTML = `
         <div class="list__meta">
             <div class="list__name">${script.name}</div>
-            <div class="list__size">${script.size} MB</div>
+            <div class="list__size">${script.size <= 1 ? "~ 1" : script.size} KB</div>
         </div>
         <button class="btn-run" onclick="execute_script('${script.name}')">Run</button>
       `;
