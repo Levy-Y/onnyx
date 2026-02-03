@@ -1,4 +1,4 @@
-use std::sync::mpsc::{Receiver, Sender};
+use crate::storage_manager::File;
 use esp_idf_hal::io::Write;
 use esp_idf_svc::http::server::{Configuration, EspHttpConnection, EspHttpServer, Request};
 use esp_idf_svc::http::{Headers, Method};
@@ -6,7 +6,7 @@ use esp_idf_svc::io::Read;
 use log::info;
 use serde::Deserialize;
 use serde_json::json;
-use crate::storage_manager::File;
+use std::sync::mpsc::{Receiver, Sender};
 
 const INDEX_HTML: &str = include_str!("static/index.html");
 const MAX_LEN: usize = 128;
@@ -37,38 +37,41 @@ impl WebActor<'static> {
             Ok(())
         })?;
 
-        server.fn_handler("/scripts", Method::Get, |req| -> anyhow::Result<()> {
-            let data = json!([{"name": "script_1.ox", "size": 4}]);
-            let json_string = data.to_string();
+        server.fn_handler("/scripts", Method::Get, move |req| -> anyhow::Result<()> {
+            let json_string = serde_json::to_string(&scripts)?;
 
             let mut resp = req.into_response(200, None, &[("Content-Type", "application/json")])?;
             resp.write_all(json_string.as_bytes())?;
             Ok(())
         })?;
 
-        server.fn_handler("/scripts", Method::Post, move |mut req| -> anyhow::Result<()> {
-            let len = req
-                .header("Content-Length")
-                .and_then(|v| v.parse::<usize>().ok())
-                .unwrap_or(0);
+        server.fn_handler(
+            "/scripts",
+            Method::Post,
+            move |mut req| -> anyhow::Result<()> {
+                let len = req
+                    .header("Content-Length")
+                    .and_then(|v| v.parse::<usize>().ok())
+                    .unwrap_or(0);
 
-            if len > MAX_LEN {
-                req.into_status_response(413)?
-                    .write_all("Request too big".as_bytes())?;
-                return Ok(());
-            }
+                if len > MAX_LEN {
+                    req.into_status_response(413)?
+                        .write_all("Request too big".as_bytes())?;
+                    return Ok(());
+                }
 
-            let mut buf = vec![0; len];
-            req.read_exact(&mut buf)?;
+                let mut buf = vec![0; len];
+                req.read_exact(&mut buf)?;
 
-            let execution_request = serde_json::from_slice::<ExecutionRequest>(&buf)?;
-            info!("{}", execution_request.name);
+                let execution_request = serde_json::from_slice::<ExecutionRequest>(&buf)?;
+                info!("{}", execution_request.name);
 
-            tx.send(execution_request.name)?;
+                tx.send(execution_request.name)?;
 
-            req.into_status_response(204)?;
-            Ok(())
-        })?;
+                req.into_status_response(204)?;
+                Ok(())
+            },
+        )?;
 
         Ok(Self { server })
     }
