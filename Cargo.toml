@@ -29,7 +29,7 @@ experimental = ["esp-idf-svc/experimental"]
 
 [dependencies]
 log = "0.4"
-esp-idf-svc = { version = "0.51", features = ["experimental"] }
+esp-idf-svc = { version = "0.51", features = ["experimental", "std"] }
 esp-idf-hal = { version = "0.45", features = ["experimental"] }
 esp-idf-sys = { version = "0.36.1", features = ["binstart"] }
 
@@ -41,8 +41,9 @@ smart-leds = "0.4"
 usb-device = "0.3.2"
 #usbd-hid = "0.9.0"
 st7735-lcd = "0.10.0"
+serde = { version = "1.0.227", features = ["derive", "serde_derive"] }
 serde_json = "1.0.149"
-serde = { version = "1.0.227", features = ["derive"] }
+libc = "0.2.180"
 
 [build-dependencies]
 embuild = "0.33"

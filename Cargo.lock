@@ -14,6 +14,7 @@ dependencies = [
  "esp-idf-svc",
  "esp-idf-sys",
  "kolibri-embedded-gui",
+ "libc",
  "log",
  "serde",
  "serde_json",
