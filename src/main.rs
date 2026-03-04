@@ -4,6 +4,7 @@ mod led_manager;
 mod storage_manager;
 mod web_server;
 mod wifi_manager;
+mod state_machine;
 
 use std::sync::mpsc;
 use std::thread;
@@ -17,11 +18,16 @@ use crate::wifi_manager::{await_network_start, get_ap_info, init_ap_modem, Passw
 use display_manager::DeviceState;
 use esp_idf_hal::{delay::FreeRtos, prelude::Peripherals};
 use esp_idf_svc::{log::EspLogger, sys::link_patches};
+use esp_idf_sys::{tinyusb_config_t, tinyusb_driver_install};
 use log::info;
+use crate::state_machine::{State, StateMachine};
 
 fn main() -> anyhow::Result<()> {
     link_patches();
     EspLogger::initialize_default();
+
+    let mut state_machine = StateMachine::new();
+    state_machine.set(&State::STARTING)?;
 
     info!("Starting...");
 
@@ -41,6 +47,7 @@ fn main() -> anyhow::Result<()> {
     let mut ui = init_ui(&mut display)?;
     let ap_info = get_ap_info(&mut wifi)?;
 
+    state_machine.set(&State::IDLE)?;
     set_state(
         &mut ui,
         &DeviceState::Idle(
@@ -55,7 +62,7 @@ fn main() -> anyhow::Result<()> {
 
     let tx_clone1 = web_executor_tx.clone();
 
-    StorageManager::init(
+    if let Err(e) = StorageManager::init(
         peripherals.sdmmc1,
         peripherals.pins.gpio16,
         peripherals.pins.gpio12,
@@ -63,10 +70,16 @@ fn main() -> anyhow::Result<()> {
         peripherals.pins.gpio17,
         peripherals.pins.gpio21,
         peripherals.pins.gpio18,
-        storage_web_tx
-    )?;
+        storage_web_tx,
+    ) {
+        state_machine.set(&State::ERROR("No SD Card inserted".to_string()))?;
+        info!("Storage unavailable: {}", e);
+    }
 
-    thread::spawn(move || ExecutorActor::start(web_executor_rx));
+    thread::Builder::new()
+        .stack_size(8192)
+        .name("executor".into())
+        .spawn(move || ExecutorActor::start(web_executor_rx))?;
 
     thread::Builder::new()
         .stack_size(8192)
