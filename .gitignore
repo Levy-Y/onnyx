@@ -3,5 +3,4 @@
 /target
 /.idea
 /.direnv
-/.cargo
 /.rustup
