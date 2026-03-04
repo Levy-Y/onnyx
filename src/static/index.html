@@ -292,7 +292,7 @@
     if (scripts == null || scripts.length === 0) {
       let empty_list_item = document.createElement("div");
       empty_list_item.className = "list__empty list__empty--visible";
-      empty_list_item.textContent = "No scripts found.";
+      empty_list_item.textContent = "No SD card inserted, or no scripts found in the 'PAYLOADS/' directory.";
       script_list.appendChild(empty_list_item);
       return;
     }

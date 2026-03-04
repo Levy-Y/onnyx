@@ -1,13 +1,13 @@
-use std::sync::OnceLock;
 use anyhow::anyhow;
 use esp_idf_hal::modem::Modem;
 use esp_idf_hal::peripheral::Peripheral;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
+use esp_idf_svc::mdns::EspMdns;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::wifi::{
     AccessPointConfiguration, AuthMethod, BlockingWifi, Configuration, EspWifi,
 };
-use esp_idf_svc::mdns::EspMdns;
+use std::sync::OnceLock;
 
 static MDNS: OnceLock<EspMdns> = OnceLock::new();
 
@@ -59,15 +59,10 @@ pub fn init_ap_modem<'a>(
     let mut mdns = EspMdns::take()?;
     mdns.set_hostname("onnyx")?;
 
-    mdns.add_service(
-        Some("ONNYX Dashboard"),
-        "_http",
-        "_tcp",
-        80,
-        &[],
-    )?;
+    mdns.add_service(Some("ONNYX Dashboard"), "_http", "_tcp", 80, &[])?;
 
-    MDNS.set(mdns).map_err(|_| anyhow!("mDNS already initialized"))?;
+    MDNS.set(mdns)
+        .map_err(|_| anyhow!("mDNS already initialized"))?;
 
     Ok(wifi)
 }

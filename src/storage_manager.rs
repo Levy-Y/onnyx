@@ -1,17 +1,18 @@
-use std::fs;
+use std::io::Write;
+use anyhow::{anyhow, Error};
 use esp_idf_hal::gpio;
 use esp_idf_hal::peripheral::Peripheral;
 use esp_idf_hal::sd::mmc::{SdMmcHostConfiguration, SdMmcHostDriver, SDMMC1};
 use esp_idf_hal::sd::{SdCardConfiguration, SdCardDriver};
 use esp_idf_svc::fs::fatfs::Fatfs;
 use esp_idf_svc::io::vfs::MountedFatfs;
-use std::fs::{create_dir, exists, read_dir};
+use log::info;
+use serde::Serialize;
+use std::fs;
+use std::fs::{create_dir, exists, read_dir, OpenOptions};
 use std::os::unix::fs::MetadataExt;
 use std::sync::mpsc::Sender;
 use std::sync::OnceLock;
-use anyhow::anyhow;
-use log::info;
-use serde::Serialize;
 
 const PAYLOADS_DIR: &str = "/data/payloads";
 pub static STORAGE: OnceLock<StorageManager> = OnceLock::new();
@@ -30,6 +31,8 @@ pub struct File {
     location: String,
 }
 
+const LOG_FILE: &str = "/data/debug.log";
+
 impl StorageManager {
     pub fn init(
         mmc: impl Peripheral<P = SDMMC1> + 'static,
@@ -39,9 +42,9 @@ impl StorageManager {
         d1: impl Peripheral<P = gpio::Gpio17> + 'static,
         d2: impl Peripheral<P = gpio::Gpio21> + 'static,
         d3: impl Peripheral<P = gpio::Gpio18> + 'static,
-        tx: Sender<Vec<File>>
-    ) -> anyhow::Result<()> {
-        let sd_card_driver = SdCardDriver::new_mmc(
+        tx: Sender<Vec<File>>,
+    ) -> anyhow::Result<(), Error> {
+        let driver_result = SdCardDriver::new_mmc(
             SdMmcHostDriver::new_4bits(
                 mmc,
                 cmd,
@@ -55,24 +58,54 @@ impl StorageManager {
                 &SdMmcHostConfiguration::new(),
             )?,
             &SdCardConfiguration::new(),
-        )?;
+        );
 
-        let mounted_fatfs = MountedFatfs::mount(Fatfs::new_sdcard(0, sd_card_driver)?, "/data", 4)?;
+        match driver_result {
+            Ok(sd_card_driver) => {
+                if let Ok(sd_card_fs) = Fatfs::new_sdcard(0, sd_card_driver) {
+                    let mounted_fatfs = MountedFatfs::mount(sd_card_fs, "/data", 4)?;
+                    if !exists(&PAYLOADS_DIR)? {
+                        create_dir(&PAYLOADS_DIR)?;
+                    }
 
-        if !exists(&PAYLOADS_DIR)? {
-            create_dir(&PAYLOADS_DIR)?;
-        };
+                    STORAGE
+                        .set(Self { fs: mounted_fatfs })
+                        .map_err(|_| anyhow!("StorageManager already initialized"))
+                        .expect("Storage constraint violation");
 
-        STORAGE.set(Self { fs: mounted_fatfs })
-            .map_err(|_| anyhow!("StorageManager already initialized")).expect("Fatal error happened during storage initialization");
-
-        tx.send(Self::read_files()?)?;
+                    tx.send(Self::read_files()?)?;
+                } else {
+                    tx.send(vec![])?;
+                    return Err(anyhow!("FATFS initialization failed."));
+                }
+            }
+            Err(_) => {
+                tx.send(vec![])?;
+                return Err(anyhow!("SD card initialization timeout. Hardware absent."));
+            }
+        }
 
         Ok(())
     }
 
+    pub fn log(msg: &str) {
+        println!("{}", msg)
+        // if STORAGE.get().is_none() {
+        //     return;
+        // }
+        // if let Ok(mut f) = OpenOptions::new()
+        //     .create(true)
+        //     .append(true)
+        //     .open(LOG_FILE)
+        // {
+        //     let _ = writeln!(f, "{}", msg);
+        // }
+    }
+
     pub fn get(&self) -> anyhow::Result<&'static Self> {
-        STORAGE.get().ok_or_else(|| anyhow!("StorageManager not initialized"))
+        STORAGE
+            .get()
+            .ok_or_else(|| anyhow!("StorageManager not initialized"))
     }
 
     pub fn read_files<'a>() -> anyhow::Result<Vec<File>> {
