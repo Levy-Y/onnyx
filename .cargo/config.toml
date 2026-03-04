@@ -6,6 +6,9 @@ linker = "ldproxy"
 runner = "espflash flash --monitor"
 rustflags = [ "--cfg",  "espidf_time64"]
 
+[rust-analyzer]
+rustc_source = "discover"
+
 [unstable]
 build-std = ["std", "panic_abort"]
 

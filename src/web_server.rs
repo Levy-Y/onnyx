@@ -13,7 +13,8 @@ const MAX_LEN: usize = 128;
 
 #[derive(Deserialize)]
 pub struct ExecutionRequest {
-    name: String,
+    name: Option<String>,
+    script: Option<String>,
 }
 
 pub struct WebActor<'a> {
@@ -45,6 +46,7 @@ impl WebActor<'static> {
             Ok(())
         })?;
 
+        let tx_scripts = tx.clone();
         server.fn_handler(
             "/scripts",
             Method::Post,
@@ -54,7 +56,7 @@ impl WebActor<'static> {
                     .and_then(|v| v.parse::<usize>().ok())
                     .unwrap_or(0);
 
-                if len > MAX_LEN {
+                if len > MAX_LEN * 10 {
                     req.into_status_response(413)?
                         .write_all("Request too big".as_bytes())?;
                     return Ok(());
@@ -64,9 +66,13 @@ impl WebActor<'static> {
                 req.read_exact(&mut buf)?;
 
                 let execution_request = serde_json::from_slice::<ExecutionRequest>(&buf)?;
-                info!("{}", execution_request.name);
 
-                tx.send(execution_request.name)?;
+                if let Some(name) = execution_request.name {
+                    info!("Executing script file: {}", name);
+                    tx_scripts.send(name)?;
+                } else if let Some(script) = execution_request.script {
+                    info!("Executing direct script: {}", script);
+                }
 
                 req.into_status_response(204)?;
                 Ok(())
