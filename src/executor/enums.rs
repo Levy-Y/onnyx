@@ -1,8 +1,8 @@
 use crate::executor::enums::Keys::{
     ALT, CAPS, CTRL, DEL, END, ENTER, ESC, GUI, HOME, PGDN, PGUP, PRTSCR, SHIFT, TAB,
 };
-use crate::executor::errors::executor_errors::ParseError;
-use crate::executor::errors::executor_errors::ParseError::{ActionParseError, KeyParseError};
+use crate::executor::errors::ParseError;
+use crate::executor::errors::ParseError::{ActionParseError, KeyParseError};
 use crate::executor::Actions::{COMMENT, KEY, WAIT, WRITE};
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
@@ -30,6 +30,7 @@ pub enum Keys {
     PGUP,
     PGDN,
     ENTER,
+    CHAR(char),
 }
 
 impl Actions {
@@ -104,7 +105,13 @@ impl FromStr for Keys {
             "PGUP" => Ok(PGUP),
             "PGDN" => Ok(PGDN),
             "ENTER" => Ok(ENTER),
-            _ => Err(KeyParseError(s.to_string())),
+            _ => {
+                if s.len() == 1 {
+                    Ok(Keys::CHAR(s.chars().next().unwrap()))
+                } else {
+                    Err(KeyParseError(s.to_string()))
+                }
+            }
         }
     }
 }
