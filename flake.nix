@@ -20,7 +20,7 @@
           stdenv.cc.cc.lib
           pkgs-legacy.libxml2.out
           zlib
-	  just
+	      just
         ];
 
         env = {

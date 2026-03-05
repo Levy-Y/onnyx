@@ -1,4 +1,3 @@
-use std::io::Write;
 use anyhow::{anyhow, Error};
 use esp_idf_hal::gpio;
 use esp_idf_hal::peripheral::Peripheral;
@@ -10,11 +9,12 @@ use log::info;
 use serde::Serialize;
 use std::fs;
 use std::fs::{create_dir, exists, read_dir, OpenOptions};
+use std::io::Write;
 use std::os::unix::fs::MetadataExt;
 use std::sync::mpsc::Sender;
 use std::sync::OnceLock;
 
-const PAYLOADS_DIR: &str = "/data/payloads";
+const PAYLOADS_DIR: &str = "/data/PAYLOADS";
 pub static STORAGE: OnceLock<StorageManager> = OnceLock::new();
 
 pub struct StorageManager {
@@ -89,17 +89,12 @@ impl StorageManager {
     }
 
     pub fn log(msg: &str) {
-        println!("{}", msg)
-        // if STORAGE.get().is_none() {
-        //     return;
-        // }
-        // if let Ok(mut f) = OpenOptions::new()
-        //     .create(true)
-        //     .append(true)
-        //     .open(LOG_FILE)
-        // {
-        //     let _ = writeln!(f, "{}", msg);
-        // }
+        if STORAGE.get().is_none() {
+            return;
+        }
+        if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(LOG_FILE) {
+            let _ = writeln!(f, "{}", msg);
+        }
     }
 
     pub fn get(&self) -> anyhow::Result<&'static Self> {
