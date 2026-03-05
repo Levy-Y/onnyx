@@ -1,13 +1,14 @@
 mod enums;
-mod tinyusb;
 pub mod errors;
+mod tinyusb;
 use std::thread;
 
-pub use errors::ExecutorError;
 use crate::executor::tinyusb::{CONFIG_DESC, DEVICE_DESC, STRING_DESC};
+use crate::state_machine::State;
 use crate::storage_manager::STORAGE;
-use crate::StorageManager;
+use crate::{StorageManager, STATE_MACHINE};
 pub use enums::Actions;
+pub use errors::ExecutorError;
 use esp_idf_sys::{
     tinyusb_config_t, tinyusb_driver_install, tud_hid_n_keyboard_report, tud_hid_n_ready,
     tud_mounted,
@@ -15,7 +16,7 @@ use esp_idf_sys::{
 use std::ffi::c_char;
 use std::sync::mpsc::Receiver;
 use std::sync::OnceLock;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 static HID_INITIALIZED: OnceLock<()> = OnceLock::new();
 
@@ -53,9 +54,9 @@ impl ExecutorActor {
                 cfg.string_descriptor_count = STRING_DESC.0.len() as i32;
 
                 cfg.__bindgen_anon_1 = esp_idf_sys::tinyusb_config_t__bindgen_ty_1 {
-                    device_descriptor: DEVICE_DESC.as_ptr()
-                        as *const esp_idf_sys::tusb_desc_device_t,
+                    device_descriptor: &DEVICE_DESC as *const esp_idf_sys::tusb_desc_device_t,
                 };
+
                 cfg.__bindgen_anon_2
                     .__bindgen_anon_1
                     .configuration_descriptor = CONFIG_DESC.as_ptr();
@@ -71,21 +72,40 @@ impl ExecutorActor {
     }
 
     fn handle_action(script_name: String) -> anyhow::Result<()> {
-        if script_name.starts_with("DIRECT:KEY ") {
-            let key_str = &script_name[11..];
-            let action = Actions::from_line(&format!("KEY {}", key_str))?;
-            Self::execute_actions(vec![action]);
-            return Ok(());
-        }
-        let script_content = STORAGE.get().unwrap().get_file_content(script_name)?;
-        let parsed_actions = Self::parse_script(&script_content)?;
-        Self::execute_actions(parsed_actions);
+        let old_state = {
+            let sm = STATE_MACHINE.lock().unwrap();
+            sm.state.clone()
+        };
 
-        Ok(())
+        {
+            let mut sm = STATE_MACHINE.lock().unwrap();
+            let _ = sm.set(&State::EXECUTING(script_name.clone()));
+        }
+
+        let result = (|| -> anyhow::Result<()> {
+            if script_name.starts_with("DIRECT:KEY ") {
+                let key_str = &script_name[11..];
+                let action = Actions::from_line(&format!("KEY {}", key_str))?;
+                Self::execute_actions(vec![action]);
+                return Ok(());
+            }
+            let script_content = STORAGE.get().unwrap().get_file_content(script_name)?;
+            let parsed_actions = Self::parse_script(&script_content)?;
+            Self::execute_actions(parsed_actions);
+            Ok(())
+        })();
+
+        {
+            let mut sm = STATE_MACHINE.lock().unwrap();
+            let _ = sm.set(&old_state);
+        }
+
+        result
     }
 
     fn parse_script(script_content: &String) -> Result<Vec<Actions>, ExecutorError> {
         if script_content.is_empty() {
+            StorageManager::log("Cannot parse an empty file.");
             return Err(ExecutorError::TaskFailed(String::from(
                 "Cannot parse an empty file.",
             )));
@@ -100,6 +120,7 @@ impl ExecutorActor {
             }
             let action = Actions::from_line(line);
             if action.is_err() {
+                StorageManager::log("Error while parsing script.");
                 return Err(ExecutorError::TaskFailed(
                     "Error while parsing script.".to_string(),
                 ));
@@ -217,10 +238,21 @@ impl ExecutorActor {
 
     fn send_report(modifier: u8, mut keycodes: [u8; 6]) {
         unsafe {
+            let start = Instant::now();
+            let timeout = Duration::from_secs(2);
+
             while !tud_mounted() {
+                if start.elapsed() > timeout {
+                    StorageManager::log("USB not mounted, skipping report.");
+                    return;
+                }
                 thread::sleep(Duration::from_millis(10));
             }
             while !tud_hid_n_ready(0) {
+                if start.elapsed() > timeout {
+                    StorageManager::log("USB not ready, skipping report.");
+                    return;
+                }
                 thread::sleep(Duration::from_millis(10));
             }
 
