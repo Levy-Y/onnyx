@@ -9,7 +9,9 @@ pub enum StateMachineError {
 impl Display for StateMachineError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            StateMachineError::IllegalStateSwitchError(previous, desired) => write!(f, "Illegal state switch: {} -> {}", previous, desired),
+            StateMachineError::IllegalStateSwitchError(previous, desired) => {
+                write!(f, "Illegal state switch: {} -> {}", previous, desired)
+            }
         }
     }
 }

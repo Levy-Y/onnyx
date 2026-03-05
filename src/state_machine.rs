@@ -1,16 +1,16 @@
 mod errors;
 
+use crate::state_machine::errors::StateMachineError;
+use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::LazyLock;
-use anyhow::{Result};
 use strum_macros::{Display, EnumString, IntoStaticStr};
-use crate::state_machine::errors::StateMachineError;
 
-#[derive(Debug, Clone)]
-#[derive(Display, EnumString, IntoStaticStr)]
+#[derive(Debug, Clone, Display, EnumString, IntoStaticStr)]
 pub enum State {
+    NONE,
     STARTING,
-    IDLE,
+    IDLE(String, String, String),
     EXECUTING(String),
     ERROR(String),
 }
@@ -30,28 +30,72 @@ impl std::hash::Hash for State {
 
 static STATE_ORDERS: LazyLock<HashMap<State, Vec<State>>> = LazyLock::new(|| {
     HashMap::from([
-        (State::STARTING,                 vec![State::IDLE]),
-        (State::IDLE,                     vec![State::EXECUTING(String::new()), State::ERROR(String::new())]),
-        (State::EXECUTING(String::new()), vec![State::IDLE, State::ERROR(String::new())]),
-        (State::ERROR(String::new()),     vec![State::IDLE]),
+        (
+            State::NONE,
+            vec![State::STARTING]
+        ),
+        (
+            State::STARTING,
+            vec![
+                State::IDLE(String::new(), String::new(), String::new()),
+                State::ERROR(String::new())
+            ],
+        ),
+        (
+            State::IDLE(String::new(), String::new(), String::new()),
+            vec![State::EXECUTING(String::new()), State::ERROR(String::new())],
+        ),
+        (
+            State::EXECUTING(String::new()),
+            vec![
+                State::IDLE(String::new(), String::new(), String::new()),
+                State::ERROR(String::new()),
+            ],
+        ),
+        (
+            State::ERROR(String::new()),
+            vec![State::IDLE(String::new(), String::new(), String::new())],
+        ),
     ])
 });
 
+pub trait StateObserver: Send + Sync {
+    fn on_state_change(&mut self, state: &State);
+}
+
 pub struct StateMachine {
-    state: State
+    pub state: State,
+    observers: Vec<Box<dyn StateObserver>>,
 }
 
 impl StateMachine {
     pub(crate) fn new() -> Self {
-        Self { state: State::STARTING }
+        Self {
+            state: State::NONE,
+            observers: Vec::new(),
+        }
+    }
+
+    pub(crate) fn subscribe(&mut self, observer: Box<dyn StateObserver>) {
+        self.observers.push(observer);
     }
 
     pub(crate) fn set(&mut self, desired: &State) -> Result<(), StateMachineError> {
-        if STATE_ORDERS.get(&self.state).unwrap().contains(desired) {
+        let allowed = STATE_ORDERS.get(&self.state).ok_or_else(|| {
+            StateMachineError::IllegalStateSwitchError(self.state.to_string(), desired.to_string())
+        })?;
+
+        if allowed.contains(desired) {
             self.state = desired.clone();
+            for observer in self.observers.iter_mut() {
+                observer.on_state_change(&self.state);
+            }
             Ok(())
         } else {
-            Err(StateMachineError::IllegalStateSwitchError(self.state.to_string(), desired.to_string()))
+            Err(StateMachineError::IllegalStateSwitchError(
+                self.state.to_string(),
+                desired.to_string(),
+            ))
         }
     }
 }

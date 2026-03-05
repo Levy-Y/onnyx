@@ -1,17 +1,18 @@
 mod display_manager;
 mod executor;
 mod led_manager;
+mod state_machine;
 mod storage_manager;
 mod web_server;
 mod wifi_manager;
-mod state_machine;
 
-use std::sync::mpsc;
+use std::sync::{mpsc, LazyLock, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
-
-use crate::display_manager::{init_display, init_ui, set_state};
+use anyhow::anyhow;
+use crate::display_manager::DisplayManager;
 use crate::executor::ExecutorActor;
+use crate::state_machine::{State, StateMachine};
 use crate::storage_manager::{File, StorageManager};
 use crate::web_server::WebActor;
 use crate::wifi_manager::{await_network_start, get_ap_info, init_ap_modem, PasswordString};
@@ -20,22 +21,19 @@ use esp_idf_hal::{delay::FreeRtos, prelude::Peripherals};
 use esp_idf_svc::{log::EspLogger, sys::link_patches};
 use esp_idf_sys::{tinyusb_config_t, tinyusb_driver_install};
 use log::info;
-use crate::state_machine::{State, StateMachine};
+
+pub static STATE_MACHINE: LazyLock<Mutex<StateMachine>> =
+    LazyLock::new(|| Mutex::new(StateMachine::new()));
 
 fn main() -> anyhow::Result<()> {
     link_patches();
     EspLogger::initialize_default();
 
-    let mut state_machine = StateMachine::new();
-    state_machine.set(&State::STARTING)?;
-
     info!("Starting...");
 
     let peripherals = Peripherals::take()?;
-    let mut wifi = init_ap_modem(peripherals.modem, "hidden", true, "password", 1)?;
-    await_network_start(&mut wifi)?;
 
-    let mut display = init_display(
+    let display = DisplayManager::new(
         peripherals.spi2,
         peripherals.pins.gpio1,
         peripherals.pins.gpio2,
@@ -44,18 +42,11 @@ fn main() -> anyhow::Result<()> {
         peripherals.pins.gpio5,
     )?;
 
-    let mut ui = init_ui(&mut display)?;
-    let ap_info = get_ap_info(&mut wifi)?;
-
-    state_machine.set(&State::IDLE)?;
-    set_state(
-        &mut ui,
-        &DeviceState::Idle(
-            ap_info.ssid,
-            PasswordString::new(ap_info.password)?,
-            ap_info.ip,
-        ),
-    )?;
+    STATE_MACHINE.lock().unwrap().subscribe(Box::new(display));
+    STATE_MACHINE
+        .lock()
+        .unwrap()
+        .set(&State::STARTING)?;
 
     let (web_executor_tx, web_executor_rx) = mpsc::channel::<String>();
     let (storage_web_tx, storage_web_rx) = mpsc::channel::<Vec<File>>();
@@ -72,9 +63,25 @@ fn main() -> anyhow::Result<()> {
         peripherals.pins.gpio18,
         storage_web_tx,
     ) {
-        state_machine.set(&State::ERROR("No SD Card inserted".to_string()))?;
+        STATE_MACHINE
+            .lock()
+            .unwrap()
+            .set(&State::ERROR("No SD Card inserted".to_string()))?;
         info!("Storage unavailable: {}", e);
+        return Err(anyhow!("Cannot continue without an SD card inserted.."))
     }
+
+    let mut wifi = init_ap_modem(peripherals.modem, "hidden", true, "password", 1)?;
+    await_network_start(&mut wifi)?;
+
+    FreeRtos::delay_ms(2000);
+
+    let ap_info = get_ap_info(&mut wifi)?;
+
+    STATE_MACHINE
+        .lock()
+        .unwrap()
+        .set(&State::IDLE(ap_info.ssid, ap_info.password, ap_info.ip))?;
 
     thread::Builder::new()
         .stack_size(8192)

@@ -1,7 +1,7 @@
+use crate::state_machine::{State, StateObserver};
 use crate::wifi_manager::PasswordString;
-use anyhow::anyhow;
+use anyhow::Error;
 use embedded_graphics::mono_font::ascii::*;
-use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::Size;
 use esp_idf_hal::delay::Ets;
 use esp_idf_hal::gpio::{Gpio0, Gpio1, Gpio2, Gpio3, Gpio4, Gpio5, Output, PinDriver};
@@ -27,96 +27,86 @@ pub type DisplayType<'a> = ST7735<
     PinDriver<'a, Gpio1, Output>,
 >;
 
-pub fn init_display<'a>(
-    spi: impl Peripheral<P = SPI2> + 'a,
-    rst: impl Peripheral<P = Gpio1> + 'a,
-    dc: impl Peripheral<P = Gpio2> + 'a,
-    sdo: impl Peripheral<P = Gpio3> + 'a,
-    cs: Option<impl Peripheral<P = Gpio4> + 'a>,
-    sclk: impl Peripheral<P = Gpio5> + 'a,
-) -> anyhow::Result<DisplayType<'a>> {
-    let driver_config = Default::default();
-    let spi_config = spi::SpiConfig::new().baudrate(Hertz::from(26_000_000));
-    let spi = SpiDeviceDriver::new_single(
-        spi,
-        sclk,
-        sdo,
-        Option::<Gpio0>::None,
-        cs,
-        &driver_config,
-        &spi_config,
-    )?;
-
-    let rst = PinDriver::output(rst)?;
-    let dc = PinDriver::output(dc)?;
-
-    let rgb = false;
-    let inverted = true;
-    let width = 160;
-    let height = 80;
-
-    let mut display = ST7735::new(spi, dc, rst, rgb, inverted, width, height);
-
-    let mut delay = Ets;
-    display.init(&mut delay).unwrap();
-    display.set_orientation(&Orientation::Landscape).unwrap();
-    display.set_offset(1, 26);
-
-    Ok(display)
+pub struct DisplayManager<'a> {
+    display: DisplayType<'a>,
 }
 
-pub fn init_ui<'a, 'b>(
-    display: &'b mut DisplayType<'a>,
-) -> anyhow::Result<Ui<'b, DisplayType<'a>, Rgb565>>
-where
-    'a: 'b,
-{
-    let mut ui = Ui::new_fullscreen(display, medsize_crt_rgb565_style());
-    ui.clear_background().unwrap();
-    Ok(ui)
-}
+unsafe impl Send for DisplayManager<'_> {}
+unsafe impl Sync for DisplayManager<'_> {}
 
-pub fn set_state<'a, 'b>(
-    ui: &mut Ui<'b, DisplayType<'a>, Rgb565>,
-    state: &DeviceState,
-) -> anyhow::Result<()>
-where
-    'a: 'b,
-{
-    ui.clear_background()
-        .map_err(|_| anyhow!("Error occurred while clearing screen"))?;
+impl<'a> DisplayManager<'a> {
+    pub(crate) fn new<'b>(
+        spi: impl Peripheral<P = SPI2> + 'b + 'a,
+        rst: impl Peripheral<P = Gpio1> + 'b + 'a,
+        dc: impl Peripheral<P = Gpio2> + 'b + 'a,
+        sdo: impl Peripheral<P = Gpio3> + 'b + 'a,
+        cs: Option<impl Peripheral<P = Gpio4> + 'b + 'a>,
+        sclk: impl Peripheral<P = Gpio5> + 'b + 'a,
+    ) -> Result<Self, Error> {
+        let driver_config = Default::default();
+        let spi_config = spi::SpiConfig::new().baudrate(Hertz::from(26_000_000));
+        let spi = SpiDeviceDriver::new_single(
+            spi,
+            sclk,
+            sdo,
+            Option::<Gpio0>::None,
+            cs,
+            &driver_config,
+            &spi_config,
+        )?;
 
-    match state {
-        DeviceState::Idle(ssid, password, ip) => {
-            ui.add(Label::new("READY").with_font(FONT_7X14_BOLD));
-            ui.add(Label::new(format!("SSID: {}", ssid).as_str()).with_font(FONT_6X10));
-            ui.add(
-                Label::new(format!("PASSWORD: {}", password.as_str()).as_str())
-                    .with_font(FONT_6X10),
-            );
-            ui.add(Label::new(format!("IP: {}", ip).as_str()).with_font(FONT_6X10));
-        }
-        DeviceState::Fatal(_) => {
-            ui.add(Spacer::new(Size::new(160, 26)));
-            ui.add(Label::new("Fatal error happened").with_font(FONT_7X14_BOLD));
-            ui.add(Label::new("Manual reset required!").with_font(FONT_7X14_BOLD));
-        }
+        let rst = PinDriver::output(rst)?;
+        let dc = PinDriver::output(dc)?;
 
-        // DeviceState::Running(payload) => {
-        //     // Draw generic "Hacking" visual
-        //     Text::new("EXECUTING:", Point::zero(), style)
-        //         .align_to(&display.bounding_box(), horizontal::Center, vertical::Top)
-        //         .draw(display).unwrap();
-        //
-        //     // Use TextBox for wrapping long payload names
-        //     let text_box_style = TextBoxStyleBuilder::new()
-        //         .alignment(embedded_text::alignment::HorizontalAlignment::Center)
-        //         .build();
-        //
-        //     TextBox::new(payload, display.bounding_box(), style).draw(&mut display).unwrap();
-        // }
-        _ => {}
+        let rgb = false;
+        let inverted = true;
+        let width = 160;
+        let height = 80;
+
+        let mut display = ST7735::new(spi, dc, rst, rgb, inverted, width, height);
+
+        let mut delay = Ets;
+        display.init(&mut delay).unwrap();
+        display.set_orientation(&Orientation::Landscape).unwrap();
+        display.set_offset(1, 26);
+
+        Ok(DisplayManager { display })
     }
+}
 
-    Ok(())
+impl StateObserver for DisplayManager<'_> {
+    fn on_state_change(&mut self, state: &State) {
+        let mut ui = Ui::new_fullscreen(&mut self.display, medsize_crt_rgb565_style());
+        ui.clear_background().unwrap();
+
+        match state {
+            State::STARTING => {
+                ui.add(Spacer::new(Size::new(160, 26)));
+                ui.add(Label::new("INITIALIZING...").with_font(FONT_7X14_BOLD));
+            }
+
+            State::IDLE(ssid, password, ip) => {
+                ui.add(Label::new("READY").with_font(FONT_7X14_BOLD));
+                ui.add(Label::new(format!("SSID: {}", ssid).as_str()).with_font(FONT_6X10));
+                ui.add(
+                    Label::new(format!("PASSWORD: {}", password.as_str()).as_str())
+                        .with_font(FONT_6X10),
+                );
+                ui.add(Label::new(format!("IP: {}", ip).as_str()).with_font(FONT_6X10));
+            }
+
+            State::EXECUTING(task) => {
+                ui.add(Spacer::new(Size::new(160, 26)));
+                ui.add(Label::new("Running script").with_font(FONT_7X14_BOLD));
+                ui.add(Label::new(task).with_font(FONT_7X14_BOLD));
+            }
+
+            State::ERROR(msg) => {
+                ui.add(Spacer::new(Size::new(160, 26)));
+                ui.add(Label::new(msg).with_font(FONT_7X14_BOLD));
+                ui.add(Label::new("Manual reset required!").with_font(FONT_7X14_BOLD));
+            }
+            _ => {}
+        }
+    }
 }
